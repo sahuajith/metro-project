@@ -1,23 +1,33 @@
 import React, { useState, useEffect } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 
 function OrderDetails() {
   const { orderId } = useParams();
+  const navigate = useNavigate();
+
   const [order, setOrder] = useState(null);
   const [message, setMessage] = useState("");
+  const [showRefundOptions, setShowRefundOptions] = useState(false);
+  const [selectedReasons, setSelectedReasons] = useState([]);
 
-//   const passImages = {
-//     "Day Pass": "https://via.placeholder.com/400x300?text=Day+Pass",
-//     "Weekly Pass": "https://via.placeholder.com/400x300?text=Weekly+Pass",
-//     "Quarterly Pass": "https://via.placeholder.com/400x300?text=Quarterly+Pass",
-//     "Annual Pass": "https://via.placeholder.com/400x300?text=Annual+Pass",
-//   };
-const passImages = {
-    "Day Pass": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTSEMVqXT8ZMa9RmHt2WvN8F4_G4xhRqIVKgg&s",
-    "Weekly Pass": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQOcmtno5dDlSMhcQsa0ygccWPMwCloYHtjvw&s",
-    "Quarterly Pass": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTU9Xt9v6YXBHOfnLWsE87F07ChHlzbmMDB3g&s",
-    "Annual Pass": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSk1N8rFvPi5IUZxdbbRz-93-xdT0eMXBf9-A&s",
+  // Pass images
+  const passImages = {
+    "Day Pass":
+      "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTSEMVqXT8ZMa9RmHt2WvN8F4_G4xhRqIVKgg&s",
+    "Weekly Pass":
+      "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQOcmtno5dDlSMhcQsa0ygccWPMwCloYHtjvw&s",
+    "Quarterly Pass":
+      "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTU9Xt9v6YXBHOfnLWsE87F07ChHlzbmMDB3g&s",
+    "Annual Pass":
+      "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSk1N8rFvPi5IUZxdbbRz-93-xdT0eMXBf9-A&s",
   };
+
+  const refundReasons = [
+    "Change of plans",
+    "Accidental purchase",
+    "Found cheaper option",
+    "Other",
+  ];
 
   useEffect(() => {
     const orders = JSON.parse(localStorage.getItem("orders") || "[]");
@@ -34,12 +44,54 @@ const passImages = {
     );
   }
 
-  const handleRefund = () => {
-    setMessage("✅ Refund processed successfully!");
+  const handleRefundClick = () => {
+    setShowRefundOptions(true);
+    setMessage("");
+  };
+
+  const handleReasonChange = (e) => {
+    const reason = e.target.value;
+    setSelectedReasons((prev) =>
+      prev.includes(reason)
+        ? prev.filter((r) => r !== reason)
+        : [...prev, reason]
+    );
+  };
+
+  const handleRefundSubmit = () => {
+    const orderDate = new Date(order.date);
+    const currentDate = new Date();
+    const diffTime = Math.abs(currentDate - orderDate);
+    const diffDays = diffTime / (1000 * 60 * 60 * 24);
+
+    if (diffDays > 3) {
+      setMessage("❌ Refund not allowed after 3 days of purchase.");
+      return;
+    }
+
+    if (selectedReasons.length === 0) {
+      setMessage("❌ Please select at least one reason.");
+      return;
+    }
+
+    // Update wallet
+    const walletBalance = Number(localStorage.getItem("walletBalance") || 100);
+    const updatedBalance = walletBalance + Number(order.price);
+    localStorage.setItem("walletBalance", updatedBalance);
+
+    setMessage(`✅ Refund successful! ₹${order.price} added to your wallet.`);
+
+    // Optionally, update order status in localStorage to prevent multiple refunds
+    const orders = JSON.parse(localStorage.getItem("orders") || "[]");
+    const updatedOrders = orders.map((o) =>
+      o.id === order.id ? { ...o, refunded: true } : o
+    );
+    localStorage.setItem("orders", JSON.stringify(updatedOrders));
   };
 
   const handleReplacement = () => {
     setMessage("✅ Replacement request submitted!");
+    navigate("/"); // Navigate to Passes/Home page
   };
 
   return (
@@ -96,21 +148,57 @@ const passImages = {
             <strong>Date:</strong> {order.date}
           </p>
 
-          <button
-            onClick={handleRefund}
-            style={{
-              marginTop: "15px",
-              padding: "10px 20px",
-              background: "#dc3545",
-              color: "white",
-              border: "none",
-              borderRadius: "5px",
-              fontWeight: "bold",
-              cursor: "pointer",
-            }}
-          >
-            Refund
-          </button>
+          {/* Refund Section */}
+          {!showRefundOptions ? (
+            <button
+              disabled={order.refunded}
+              onClick={handleRefundClick}
+              style={{
+                marginTop: "15px",
+                padding: "10px 20px",
+                background: order.refunded ? "gray" : "#dc3545",
+                color: "white",
+                border: "none",
+                borderRadius: "5px",
+                fontWeight: "bold",
+                cursor: order.refunded ? "not-allowed" : "pointer",
+              }}
+            >
+              {order.refunded ? "Refunded" : "Refund"}
+            </button>
+          ) : (
+            <div style={{ marginTop: "15px" }}>
+              <p>Select reason(s) for refund:</p>
+              {refundReasons.map((reason) => (
+                <label
+                  key={reason}
+                  style={{ display: "block", margin: "5px 0" }}
+                >
+                  <input
+                    type="checkbox"
+                    value={reason}
+                    onChange={handleReasonChange}
+                  />{" "}
+                  {reason}
+                </label>
+              ))}
+              <button
+                onClick={handleRefundSubmit}
+                style={{
+                  marginTop: "10px",
+                  padding: "10px 20px",
+                  background: "#28a745",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "5px",
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                }}
+              >
+                Submit Refund
+              </button>
+            </div>
+          )}
 
           <button
             onClick={handleReplacement}
@@ -157,3 +245,4 @@ const passImages = {
 }
 
 export default OrderDetails;
+
